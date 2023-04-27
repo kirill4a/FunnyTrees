@@ -1,10 +1,10 @@
 ﻿using FunnyTrees.Application.Contracts.Dto;
 using FunnyTrees.Application.Contracts.Queries;
 using FunnyTrees.Application.Contracts.Queries.TreeNode;
+using FunnyTrees.Application.Extensions.Mapping;
 using FunnyTrees.Domain.Repositories;
 
 namespace FunnyTrees.Application.QueryHandlers.TreeNode;
-
 internal class GetByRootNameQueryHandler : IQueryHandler<GetByRootNameQuery, TreeNodeDto?>
 {
     private readonly ITreeNodeRepository _treeNodeRepository;
@@ -20,12 +20,6 @@ internal class GetByRootNameQueryHandler : IQueryHandler<GetByRootNameQuery, Tre
 
         var domainEntity = await _treeNodeRepository.GetRootAsync(query.RootNodeName, cancellation)
                                                     .ConfigureAwait(false);
-        return (domainEntity == null)
-            ? null
-            : new()
-            {
-                Id = domainEntity.Id,
-                Name = domainEntity.Name
-            };
+        return domainEntity?.MapToDto();
     }
 }

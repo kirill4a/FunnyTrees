@@ -1,6 +1,8 @@
-﻿using System.Collections.Concurrent;
+﻿using FunnyTrees.Common.Exceptions;
+using System.Collections.Concurrent;
 
 namespace FunnyTrees.Domain.Aggregates;
+
 public class TreeNode : IAggregateRoot
 {
     private readonly ConcurrentDictionary<int, TreeNode> _childrenDictionary;
@@ -31,6 +33,9 @@ public class TreeNode : IAggregateRoot
     {
         if (child == null)
             throw new ArgumentNullException(nameof(child));
+
+        if (child.ParentId != Id)
+            throw new SecureException($"Node with id '{child.Id}' is not the child of node '{Id}'");
 
         if (_childrenDictionary.TryGetValue(child.Id, out var _))
             return false;

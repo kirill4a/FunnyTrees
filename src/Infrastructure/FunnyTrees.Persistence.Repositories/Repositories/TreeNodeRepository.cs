@@ -1,5 +1,6 @@
 ﻿using FunnyTrees.Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using DbTreeNode = FunnyTrees.Persistence.Entities.Models.TreeNode;
 using DomainTreeNode = FunnyTrees.Domain.Aggregates.TreeNode;
 
@@ -29,16 +30,58 @@ internal class TreeNodeRepository : RepositoryBase<DbTreeNode>, ITreeNodeReposit
 
     public async Task<DomainTreeNode?> GetAsync(int entityId, CancellationToken cancellation)
     {
-        var dbEntity = await Set.FindAsync(entityId, cancellation).ConfigureAwait(false);
+        var rawSql = @"
+with recursive cte as (
+	SELECT ""Id"", ""ParentId"", ""Name""
+	FROM public.""TreeNode"" t
+	WHERE t.""Id"" = @nodeId
+	
+	UNION ALL 
+	
+	SELECT t1.""Id"", t1.""ParentId"", t1.""Name""
+	FROM cte
+	JOIN public.""TreeNode"" t1 ON t1.""ParentId"" = cte.""Id"" 
+)
+select * from cte
+";
+        var nodeIdParameter = new NpgsqlParameter("@nodeId", entityId);
+        var recursiveFamily = await Set
+            .FromSqlRaw(rawSql, nodeIdParameter)
+            .ToListAsync(cancellation)
+            .ConfigureAwait(false);
+
+        var dbEntity = recursiveFamily.FirstOrDefault(n => n.Id == entityId);
+
         return Map(dbEntity);
     }
 
     public async Task<DomainTreeNode?> GetRootAsync(string rootNodeName, CancellationToken cancellation)
     {
-        var dbEntity = await Set.FirstOrDefaultAsync(
-                                            n => n.Name.ToLower() == rootNodeName.ToLower(),
-                                            cancellation)
-                                .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(rootNodeName))
+            throw new ArgumentNullException(nameof(rootNodeName));
+
+        var rawSql = @"
+with recursive cte as (
+	SELECT ""Id"", ""ParentId"", ""Name""
+	FROM public.""TreeNode"" t
+	WHERE t.""ParentId"" is null and t.""Name"" = @nodeName
+	
+	UNION ALL 
+	
+	SELECT t1.""Id"", t1.""ParentId"", t1.""Name""
+	FROM cte
+	JOIN public.""TreeNode"" t1 ON t1.""ParentId"" = cte.""Id"" 
+)
+select * from cte
+";
+        var nodeNameParameter = new NpgsqlParameter("@nodeName", rootNodeName.Trim());
+        var recursiveFamily = await Set
+            .FromSqlRaw(rawSql, nodeNameParameter)
+            .ToListAsync()
+            .ConfigureAwait(false);
+
+        var dbEntity = recursiveFamily.FirstOrDefault(n => !n.ParentId.HasValue);
+
         return Map(dbEntity);
     }
 
@@ -55,8 +98,25 @@ internal class TreeNodeRepository : RepositoryBase<DbTreeNode>, ITreeNodeReposit
     }
 
     private DomainTreeNode? Map(DbTreeNode? dbEntity)
-        =>
-        (dbEntity == null)
-            ? null
-            : new DomainTreeNode(dbEntity.Id, dbEntity.ParentId, dbEntity.Name);
+    {
+        if (dbEntity == null)
+            return null;
+
+        var result = new DomainTreeNode(dbEntity.Id, dbEntity.ParentId, dbEntity.Name);
+        if (!(dbEntity.Children?.Any() ?? false))
+            return result;
+
+        void AddChild(DomainTreeNode parent, DomainTreeNode child)
+        {
+            parent.TryAddChild(child);
+            foreach (var nextChild in child.Children)
+                AddChild(child, nextChild);
+        }
+
+        var children = dbEntity.Children.Select(Map);
+        foreach (var child in children)
+            AddChild(result, child!);
+
+        return result;
+    }
 }

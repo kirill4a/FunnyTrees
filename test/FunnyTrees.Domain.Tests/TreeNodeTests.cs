@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FunnyTrees.Common.Exceptions;
 using FunnyTrees.Domain.Aggregates;
 
 namespace FunnyTrees.Domain.Tests;
@@ -67,5 +68,52 @@ public class TreeNodeTests
         chidlNode.Name.Should().Be(childName);
         chidlNode.ParentId.Should().NotBeNull().And.Be(rootNode.Id);
         chidlNode.IsRoot.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TestAddChildFail()
+    {
+        var fakeRootId = 9;
+        var rootId = 10;
+        var rootName = "I\'m the parent";
+
+        var childId = 11;
+        var childName = "I\'m the child";
+
+        var rootNode = new TreeNode(rootId, default, rootName);
+        var childNode = new TreeNode(childId, fakeRootId, childName);
+
+        rootNode.Should().NotBeNull();
+        childNode.Should().NotBeNull();
+        rootNode.Id.Should().Be(rootId);
+        childNode.Id.Should().Be(childId);
+        rootNode.Children.Should().BeEmpty();
+        childNode.ParentId.Should().Be(fakeRootId).And.NotBe(rootNode.Id);
+
+        FluentActions.Invoking(() => rootNode.TryAddChild(childNode)).Should().ThrowExactly<SecureException>();
+    }
+
+    [Fact]
+    public void TestAddChildOk()
+    {
+        var rootId = 1;
+        var rootName = "I\'m the parent";
+
+        var childId = 2;
+        var childName = "I\'m the child";
+
+        var rootNode = new TreeNode(rootId, default, rootName);
+        var childNode = new TreeNode(childId, rootId, childName);
+
+        rootNode.Should().NotBeNull();
+        childNode.Should().NotBeNull();
+        rootNode.Id.Should().Be(rootId);
+        childNode.Id.Should().Be(childId);
+        rootNode.Children.Should().BeEmpty();
+        childNode.ParentId.Should().Be(rootNode.Id);
+
+        rootNode.TryAddChild(childNode).Should().BeTrue();
+        rootNode.Children.Should().NotBeEmpty();
+        rootNode.Children.First().Should().Be(childNode);
     }
 }

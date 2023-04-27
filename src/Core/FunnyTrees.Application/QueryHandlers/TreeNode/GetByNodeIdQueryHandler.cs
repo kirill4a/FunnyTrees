@@ -1,6 +1,7 @@
 ﻿using FunnyTrees.Application.Contracts.Dto;
 using FunnyTrees.Application.Contracts.Queries;
 using FunnyTrees.Application.Contracts.Queries.TreeNode;
+using FunnyTrees.Application.Extensions.Mapping;
 using FunnyTrees.Domain.Repositories;
 
 namespace FunnyTrees.Application.QueryHandlers.TreeNode;
@@ -20,12 +21,6 @@ internal class GetByNodeIdQueryHandler : IQueryHandler<GetByNodeIdQuery, TreeNod
 
         var domainEntity = await _treeNodeRepository.GetAsync(query.NodeId, cancellation)
                                                     .ConfigureAwait(false);
-        return (domainEntity == null)
-            ? null
-            : new()
-            {
-                Id = domainEntity.Id,
-                Name = domainEntity.Name
-            };
+        return domainEntity?.MapToDto();
     }
 }

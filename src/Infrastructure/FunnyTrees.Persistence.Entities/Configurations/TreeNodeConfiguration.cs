@@ -22,7 +22,7 @@ internal class TreeNodeConfiguration : IEntityTypeConfiguration<TreeNode>
         builder.HasOne(n => n.Parent)
               .WithMany(b => b.Children)
               .HasForeignKey(a => a.ParentId)
-              .OnDelete(DeleteBehavior.Restrict)
-              .IsRequired();
+              .IsRequired()
+              .OnDelete(DeleteBehavior.Restrict);
     }
 }
